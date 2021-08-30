@@ -17,8 +17,6 @@ library(zoo)
 library(goeveg)
 library(formattable)
 
-setwd("D:\\2-statistics projects\\ppicourse")
-
 Sys.setlocale("LC_TIME","English")
 
 #---- Bring in data ----
