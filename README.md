@@ -3,6 +3,7 @@ The assignment 4 for price index course: https://github.com/ppd-dpp/price-index-
 
 ## 1.	Which province saw the largest increase in prices since the beginning of 2018? By how much did prices change?
 Ontario increased largest to 193.6 comparing to January 2018.
+![alt_text](https://https://github.com/coredeliaz/price-index-course-assignment/blob/main/Provincial%20indices%20.jpg)
 
 ## 2.	Which province saw the smallest increase in prices since the beginning of 2018? By how much did prices change?
 British Columbia increased smallest to 144.4 comparing to January 2018.
