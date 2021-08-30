@@ -1,9 +1,11 @@
 #### Building and analyzing a price index with R ####
 # Christina(Chi) Zhang
-# July 2021
+# August 2021
 install.packages(c("dplyr", "tidyr", "gpindex", "devtools", "ggplot2"))
 devtools::install_github("ppd-dpp/calpr")
 install.packages("goeveg")
+install.packages("zoo")
+install.packages("formattable")
 
 #---- Bring in libraries ----
 library(dplyr)
@@ -11,9 +13,13 @@ library(tidyr)
 library(gpindex)
 library(calpr)
 library(ggplot2)
+library(zoo)
 library(goeveg)
+library(formattable)
 
 setwd("D:\\2-statistics projects\\ppicourse")
+
+Sys.setlocale("LC_TIME","English")
 
 #---- Bring in data ----
 source('https://raw.githubusercontent.com/ppd-dpp/price-index-course/master/scripts/get_data.R')
@@ -32,7 +38,7 @@ weights_prov <- weights %>%
 # Make product weights
 weights_prod <- weights %>%
   group_by(year, province) %>%
-  mutate(share_prod = scale_weights(weight)) %>%
+  mutate(share_prod = scale_weights(weight)) %>% # scale to sum to 1
   select(-weight) 
 
 #---- Step 2: Calculate the geomean for product K ----
@@ -42,19 +48,19 @@ dat_micro_K <- dat_micro %>%
   summarize(geomean = geometric_mean(price)) # calculate the geometric average
 
 #---- Step 3: Calculate the geomean for products A to J ----
-dat_index_AJ <- dat_gps %>%
+dat_index_AK <- dat_gps %>%
   mutate(period = year_month(period)) %>% # turn transaction dates into month-by-year dates
   gather(key = "quote", value = "price", price1:price3) %>% # melt into a long dataset
   group_by(province, product, year, period) %>%
-  drop_na() %>%
+  drop_na() %>% #remove missing quotes
   summarize(geomean = geometric_mean(price)) %>% # calculate the geometric average
   bind_rows(dat_micro_K) # append to dat_micro
 
 #---- Step 4: Calculate the period-over-period elemental indices ----
-dat_index <- dat_index_AJ %>%  
+dat_index <- dat_index_AK %>%  
   group_by(province, product) %>%
-  mutate(geomean_previous = lag(geomean,default = geomean[1])) %>%
-  mutate(rel = geomean/geomean_previous)
+  mutate(geomean_previous = lag(geomean,default = geomean[1])) %>% #match the last period geomean value
+  mutate(rel = geomean/geomean_previous) #calculate the period-over-period elemental indices
 
 #---- Step 5: Price update the product weights ----
 dat_index_update_weight <- dat_index %>%  
@@ -62,7 +68,7 @@ dat_index_update_weight <- dat_index %>%
   group_by(province, product, year) %>% 
   mutate(share_prod_u = update_weights(cumprod(lag(rel, default = 1)), share_prod)) %>% # price update the weights
   group_by(year,period,province) %>%
-  mutate(share_prod_u = scale_weights(share_prod_u)) 
+  mutate(share_prod_u = scale_weights(share_prod_u)) #rescale adjusted weights to sum to unity
 
 #---- Step 6: Calculate the province-level index ----
 index_prov <- dat_index_update_weight %>%
@@ -70,10 +76,6 @@ index_prov <- dat_index_update_weight %>%
   summarize(index_provincial_overmonth = arithmetic_mean(rel,share_prod_u)) %>% #month to month provincial-level index
   group_by(province,year) %>%
   mutate(index_provincial = cumprod(index_provincial_overmonth)) #provincial-level index at price 2018 and 2019 respectively
-
-max(index_prov$index_provincial_overmonth) 
-min(index_prov$index_provincial_overmonth) #the largest month-over-month movement in prices
-index_prov[which.max(index_prov$index_provincial_overmonth),] #province and month of largest movement
 
 #---- Step 7: Calculate the Canada-level index ----
 index <- index_prov %>%
@@ -112,14 +114,16 @@ index_mw_mixed <- index_mw %>%
   mutate(period= as.Date(period, format= "%Y-%m-%d"),source = "Monsterweb") %>%
   bind_rows(index_crea_quaterly, my_index)
 
-#---- Step 11: Line graph for provincial indices ----
-province <- data.frame("province_name" = c("NL", "PE", "NS", "NB", "QC", "ON", "MB", "SK", "AB", "BC"), "province" = c(10,11,12,13,24,35,46,47,48,59))
+#---- Question 1&2: Line graph for provincial indices ----
+province <- data.frame("province_name" = c("NL", "PE", "NS", "NB", "QC", "ON", "MB", "SK", "AB", "BC"),
+                       "province" = c(10,11,12,13,24,35,46,47,48,59))
 
 province_line <- index_chain %>%
   merge(province, by = c("province"), all.x = TRUE) %>%
   drop_na(province_name) #remove national indices
 
-ggplot(province_line, aes(x = period, y = index, group = province_name, color = province_name, linetype = province_name)) +
+ggplot(province_line, #plot of provincial line graph over years
+  aes(x = period, y = index, group = province_name, color = province_name, linetype = province_name)) +
   geom_line(size = 1.5) +
   scale_colour_manual(values = rainbow(10)) +
   scale_y_continuous(breaks = seq(100, 200, 10)) +
@@ -136,26 +140,53 @@ ggplot(province_line, aes(x = period, y = index, group = province_name, color = 
 
 ggsave("Provincial indices.tiff", width = 12, height = 9, device='tiff', dpi=700)
 
-#---- Step 12: Line graph for three national indices ----
-index_mw_mixed %>%
-  ggplot(aes(x = period, y = index, group = source, color = source)) +
+province_line_last <- province_line %>%
+  filter(period == max(period))
+
+cat("Question 1:",province_line_last$province_name[which.max(province_line_last$index)], #question 1,name of the largest increased province
+    "increased largest to",
+    round(max(province_line_last$index),1), #question 1,value of the largest increased province
+    "comparing to January 2018.")
+
+cat("Question 2:",province_line_last$province_name[which.min(province_line_last$index)], #question 1,name of the smallest increased province
+    "increased smallest to",
+    round(min(province_line_last$index),1), #question 2,value of the smallest increased province
+    "comparing to January 2018.")
+
+#---- Question 3: Line graph for provincial indices ----
+percent(max(abs(index_prov$index_provincial_overmonth - 1))) #question 3,the largest month-over-month movement in prices
+index_prov[which.max(abs(index_prov$index_provincial_overmonth-1)),] #question 3,province and month of largest movement
+
+#---- Qustion 4: Line graph for three national indices ----
+ggplot(index_mw_mixed,
+   aes(x = as.yearqtr(period), y = index, group = source, color = source)) +
    geom_line(size = 1.5) +
    scale_colour_brewer(palette = "Set1") +
    scale_y_continuous(breaks = seq(60, 140, 10)) +
-   scale_x_date(date_labels = "%b %Y") +
+   scale_x_yearqtr(format ="%YQ%q") +
    theme_bw() +
    theme(text = element_text(size=25),
          panel.grid.major = element_blank(),
          panel.grid.minor = element_blank(),
          legend.position="bottom",
          legend.title=element_blank())+
-  xlab(NULL) +
-  ylab(NULL) +
-  ggtitle("index (January 2019=100)") 
+   xlab(NULL) +
+   ylab(NULL) +
+   ggtitle("index (2019Q1 = 100)") 
 
 ggsave("National indices.tiff", width = 12, height = 9, device='tiff', dpi=700)
 
-#---- Step 13: CV for provincial indices  ----
+index_mw_mixed_last <- index_mw_mixed %>%
+  filter(period == "2019-10-01")
+  
+cat("Quesiton 4: The",index_mw_mixed_last$source[which.max(index_mw_mixed_last$index)], #question 4,name of the largest increased index
+    "index shows the largest increase to",
+    round(max(index_mw_mixed_last$index),1), #question 4,value of the largest increased index
+    "since Q1 2019.")
+
+#---- Question 5: CV for provincial indices  ----
 CV_provincial <- index_chain %>%
   group_by(province) %>%
-  summarise(cv = cv(index) * 100)
+  summarise(cv = cv(index) * 100) #calculate coefficient of variation for provincial indices
+
+ifelse(CV_provincial$cv > 33.3, CV_provincial$province, "Pass")  #test the valid based on coefficients of variation>33.3
