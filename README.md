@@ -12,6 +12,6 @@ Nova Scotia experienced the largest month-over-month movement at increasing 10.1
 
 ## 4.	Plot all three Canada-level indices on a graph. Which index shows the largest percent increase in national widget prices since quarter 1 2019?
 The CREA index shows the largest increase to 136.2 since Q1 2019.
-
+![alt text](https://github.com/coredeliaz/price-index-course-assignment/blob/main/National%20indices.jpg
 ## 5.	(Bonus) Calculate coefficients of variation (CVs) for the provincial indices. Using the usual quality rules for disseminating data at Statistics Canada, which provincial indices would need to be disseminated with a warning (i.e., a CV greater than 33.3)?
 All provincial indices are valid based on the requirement of coefficients of variation.
